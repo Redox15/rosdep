@@ -312,7 +312,7 @@ class RosdepLookup(object):
         """
         return self.errors[:]
 
-    def get_rosdeps(self, resource_name, implicit=True):
+    def get_rosdeps(self, resource_name, implicit=True, extended=False):
         """
         Get rosdeps that *resource_name* (e.g. package) requires.
 
@@ -321,7 +321,7 @@ class RosdepLookup(object):
 
         :returns: list of rosdep names, ``[str]``
         """
-        return self.loader.get_rosdeps(resource_name, implicit=implicit)
+        return self.loader.get_rosdeps(resource_name, implicit=implicit, extended=extended)
 
     def get_resources_that_need(self, rosdep_name):
         """
@@ -403,7 +403,12 @@ class RosdepLookup(object):
         # TODO: resolutions dictionary should be replaced with resolution model instead of mapping (undefined) keys.
         for resource_name in resources:
             try:
-                rosdep_keys = self.get_rosdeps(resource_name, implicit=implicit)
+                ros_dependencies = self.get_rosdeps(resource_name, implicit=implicit,
+                                               extended=True)
+                rosdep_keys = [d.name for d in ros_dependencies]
+
+                ros_dependencies_dict = {dependency.name:dependency
+                                         for dependency in ros_dependencies}
                 if self.verbose:
                     print('resolve_all: resource [%s] requires rosdep keys [%s]' % (resource_name, ', '.join(rosdep_keys)), file=sys.stderr)
                 rosdep_keys = prune_catkin_packages(rosdep_keys, self.verbose)
@@ -413,8 +418,27 @@ class RosdepLookup(object):
                         installer_key, resolution, dependencies = \
                             self.resolve(rosdep_key, resource_name, installer_context)
                         depend_graph[rosdep_key]['installer_key'] = installer_key
-                        depend_graph[rosdep_key]['install_keys'] = list(resolution)
+                        if installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_eq is not None:
+                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (=" + ros_dependencies_dict[rosdep_key].version_eq + ")"])
+
+                        elif installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_gte is not None:
+                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (>=" + ros_dependencies_dict[rosdep_key].version_gte + ")"])
+                        elif installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_gt is not None:
+                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (>>" + ros_dependencies_dict[rosdep_key].version_gt + ")"])
+
+                        elif installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_lte is not None:
+                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (<=" + ros_dependencies_dict[rosdep_key].version_lte + ")"])
+                        elif installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_lt is not None:
+                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (<<" + ros_dependencies_dict[rosdep_key].version_lt + ")"])
+
+                        else:
+                            depend_graph[rosdep_key]['install_keys'] = list(resolution)
                         depend_graph[rosdep_key]['dependencies'] = list(dependencies)
+                        depend_graph[rosdep_key]['version_eq'] = ros_dependencies_dict[rosdep_key].version_eq
+                        depend_graph[rosdep_key]['version_gte'] = ros_dependencies_dict[rosdep_key].version_gte
+                        depend_graph[rosdep_key]['version_gt'] = ros_dependencies_dict[rosdep_key].version_gt
+                        depend_graph[rosdep_key]['version_lte'] = ros_dependencies_dict[rosdep_key].version_lte
+                        depend_graph[rosdep_key]['version_lt'] = ros_dependencies_dict[rosdep_key].version_lt
                         while dependencies:
                             depend_rosdep_key = dependencies.pop()
                             # prevent infinite loop
