@@ -419,17 +419,17 @@ class RosdepLookup(object):
                             self.resolve(rosdep_key, resource_name, installer_context)
                         depend_graph[rosdep_key]['installer_key'] = installer_key
                         if installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_eq is not None:
-                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (=" + ros_dependencies_dict[rosdep_key].version_eq + ")"])
+                            depend_graph[rosdep_key]['install_keys'] = list(["\"" + resolution[0] + " (=" + ros_dependencies_dict[rosdep_key].version_eq + ")\""])
 
                         elif installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_gte is not None:
-                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (>=" + ros_dependencies_dict[rosdep_key].version_gte + ")"])
+                            depend_graph[rosdep_key]['install_keys'] = list(["\"" + resolution[0] + " (>=" + ros_dependencies_dict[rosdep_key].version_gte + ")\""])
                         elif installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_gt is not None:
-                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (>>" + ros_dependencies_dict[rosdep_key].version_gt + ")"])
+                            depend_graph[rosdep_key]['install_keys'] = list(["\"" + resolution[0] + " (>>" + ros_dependencies_dict[rosdep_key].version_gt + ")\""])
 
                         elif installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_lte is not None:
-                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (<=" + ros_dependencies_dict[rosdep_key].version_lte + ")"])
+                            depend_graph[rosdep_key]['install_keys'] = list(["\"" + resolution[0] + " (<=" + ros_dependencies_dict[rosdep_key].version_lte + ")\""])
                         elif installer_key == "apt" and ros_dependencies_dict[rosdep_key].version_lt is not None:
-                            depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + " (<<" + ros_dependencies_dict[rosdep_key].version_lt + ")"])
+                            depend_graph[rosdep_key]['install_keys'] = list(["\"" + resolution[0] + " (<<" + ros_dependencies_dict[rosdep_key].version_lt + ")\""])
 
                         else:
                             depend_graph[rosdep_key]['install_keys'] = list(resolution)
