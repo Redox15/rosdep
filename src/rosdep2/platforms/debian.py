@@ -30,6 +30,7 @@
 from __future__ import print_function
 import subprocess
 import sys
+import re
 
 from rospkg.os_detect import (
     OS_DEBIAN,
@@ -236,11 +237,23 @@ def dpkg_detect(pkgs, exec_fn=None):
     # This is a map `package name -> package name optionally with version`.
     version_lock_map = {}
     for p in pkgs:
-        if '=' in p:
-            version_lock_map[p.split('=')[0]] = p
+        if '=' in p or '>' in p or '<' in p:
+            packageName = re.split('=|>|<',p)[0]
+            packageVersion = re.split('=|>|<',p)[1]
+            # check if package already exists
+            if packageName in version_lock_map:
+                # check if package already has more than 1 version
+                if type(version_lock_map[packageName]['version']) == list:
+                    version_lock_map[packageName]['full_name'].append(p)
+                    version_lock_map[packageName]['version'].append(packageVersion)
+                else:
+                    version_lock_map[packageName]['full_name'] = list([version_lock_map[packageName]['full_name'], p])
+                    version_lock_map[packageName]['version'] = list([version_lock_map[packageName]['version'], packageVersion])
+            else:
+                version_lock_map[packageName] = {'full_name': p, 'version': packageVersion}
         else:
             version_lock_map[p] = p
-    cmd = ['dpkg-query', '-W', '-f=\'${Package} ${Status}\n\'']
+    cmd = ['dpkg-query', '-W', '-f=\'${Package} ${Status} ${version}\n\'']
     cmd.extend(version_lock_map.keys())
 
     if exec_fn is None:
@@ -248,11 +261,20 @@ def dpkg_detect(pkgs, exec_fn=None):
     std_out, std_err = exec_fn(cmd, True)
     std_out = std_out.replace('\'', '')
     pkg_list = std_out.split('\n')
+    # Remove empty strings
+    pkg_list = [i for i in pkg_list if i]
+
     for pkg in pkg_list:
         pkg_row = pkg.split()
-        if len(pkg_row) == 4 and (pkg_row[3] == 'installed'):
-            ret_list.append(pkg_row[0])
-    installed_packages = [version_lock_map[r] for r in ret_list]
+        if len(pkg_row) == 5:
+            if(pkg_row[3] == 'installed') and len(version_lock_map[pkg_row[0]]) > 1 and pkg_row[4] in version_lock_map[pkg_row[0]]['version']:
+                ret_list.append(pkg_row[0])
+    installed_packages = []
+    for r in ret_list:
+        if type(version_lock_map[r]['full_name']) == list:
+            installed_packages.extend([item for item in version_lock_map[r]['full_name']])
+        else:
+            installed_packages.extend([version_lock_map[r]['full_name']])
 
     # now for the remaining packages check, whether they are installed as
     # virtual packages
@@ -306,7 +328,7 @@ class AptInstaller(PackageManagerInstaller):
         packages = self.get_packages_to_install(resolved, reinstall=reinstall)
         if not packages:
             return []
-        base_cmd = ['apt-get', 'satisfy']
+        base_cmd = ['apt-get', 'install']
         if not interactive:
             base_cmd.append('-y')
         if quiet:
