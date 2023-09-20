@@ -400,6 +400,7 @@ class RosdepLookup(object):
         """
         depend_graph = DependencyGraph()
         errors = {}
+        versionPattern = r"\d+\.\d+\.\d+"
         # TODO: resolutions dictionary should be replaced with resolution model instead of mapping (undefined) keys.
         for resource_name in resources:
             try:
@@ -419,58 +420,61 @@ class RosdepLookup(object):
                             self.resolve(rosdep_key, resource_name, installer_context)
                         depend_graph[rosdep_key]['installer_key'] = installer_key
                         if installer_key == "apt":
-                            if ros_dependencies_dict[rosdep_key].version_eq is not None:
-                                depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + "=" + ros_dependencies_dict[rosdep_key].version_eq])
-                            else:
+                            if ros_dependencies_dict[rosdep_key].version_eq is not None \
+                            or ros_dependencies_dict[rosdep_key].version_gte is not None \
+                            or ros_dependencies_dict[rosdep_key].version_gt is not None \
+                            or ros_dependencies_dict[rosdep_key].version_lte is not None \
+                            or ros_dependencies_dict[rosdep_key].version_lt is not None:
                                 import apt
+                                import re
 
                                 cache = apt.Cache()
 
                                 # Get the package object for the specified package name
                                 package = cache[resolution[0]]
                                 availableVersions = package.versions
-                                if ros_dependencies_dict[rosdep_key].version_gte is not None \
-                                or ros_dependencies_dict[rosdep_key].version_gt is not None \
-                                or ros_dependencies_dict[rosdep_key].version_lte is not None \
-                                or ros_dependencies_dict[rosdep_key].version_lt is not None:
-                                    verInstall = None
-                                    verRequested = ""
-                                    compare = '='
-                                    lessThan = False
-                                    if ros_dependencies_dict[rosdep_key].version_gte is not None:
-                                        verRequested = ros_dependencies_dict[rosdep_key].version_gte
-                                        verInstall = verRequested
-                                        depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + "=" + verInstall])
-                                        compare = '>='
-                                    elif ros_dependencies_dict[rosdep_key].version_gt is not None:
-                                        verRequested = ros_dependencies_dict[rosdep_key].version_gt
-                                        compare = '>'
-                                    elif ros_dependencies_dict[rosdep_key].version_lte is not None:
-                                        verRequested = ros_dependencies_dict[rosdep_key].version_lte
-                                        verInstall = verRequested
-                                        compare = '<='
-                                        depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + "=" + verInstall])
-                                        lessThan = True
-                                    elif ros_dependencies_dict[rosdep_key].version_lt is not None:
-                                        verRequested = ros_dependencies_dict[rosdep_key].version_lt
-                                        compare = '<'
-                                        lessThan = True
+                                verInstall = None
+                                verRequested = ""
+                                compare = '='
+                                lessThan = False
+                                equal = False
+                                if ros_dependencies_dict[rosdep_key].version_eq is not None:
+                                    verRequested = ros_dependencies_dict[rosdep_key].version_gte
+                                    equal = True
+                                elif ros_dependencies_dict[rosdep_key].version_gte is not None:
+                                    verRequested = ros_dependencies_dict[rosdep_key].version_gte
+                                    compare = '>='
+                                    equal = True
+                                elif ros_dependencies_dict[rosdep_key].version_gt is not None:
+                                    verRequested = ros_dependencies_dict[rosdep_key].version_gt
+                                    compare = '>'
+                                elif ros_dependencies_dict[rosdep_key].version_lte is not None:
+                                    verRequested = ros_dependencies_dict[rosdep_key].version_lte
+                                    compare = '<='
+                                    equal = True
+                                    lessThan = True
+                                elif ros_dependencies_dict[rosdep_key].version_lt is not None:
+                                    verRequested = ros_dependencies_dict[rosdep_key].version_lt
+                                    compare = '<'
+                                    lessThan = True
 
-                                    for ver in availableVersions:
-                                        if apt.apt_pkg.version_compare(ver.version, verRequested)*(1-2*lessThan) > 0:
-                                            verInstall = ver.version
-                                            if resolution[0] + "=" + verInstall not in depend_graph[rosdep_key]['install_keys']:
-                                                depend_graph[rosdep_key]['install_keys'].append(resolution[0] + "=" + verInstall)
+                                for ver in availableVersions:
+                                    versFilt = re.findall(versionPattern, ver.version)[0]
+                                    instFilt = re.findall(versionPattern, verRequested)[0]
+                                    if apt.apt_pkg.version_compare(versFilt, instFilt)*(1-2*lessThan)+(1*equal) > 0:
+                                        verInstall = ver.version
+                                        if resolution[0] + "=" + verInstall not in depend_graph[rosdep_key]['install_keys']:
+                                            depend_graph[rosdep_key]['install_keys'].append(resolution[0] + "=" + verInstall)
 
-                                    if verInstall is None:
-                                        depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + compare + verRequested])
-                                    depend_graph[rosdep_key]['version_eq'] = ros_dependencies_dict[rosdep_key].version_eq
-                                    depend_graph[rosdep_key]['version_gte'] = ros_dependencies_dict[rosdep_key].version_gte
-                                    depend_graph[rosdep_key]['version_gt'] = ros_dependencies_dict[rosdep_key].version_gt
-                                    depend_graph[rosdep_key]['version_lte'] = ros_dependencies_dict[rosdep_key].version_lte
-                                    depend_graph[rosdep_key]['version_lt'] = ros_dependencies_dict[rosdep_key].version_lt
-                                else:
-                                    depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + "=" + availableVersions[0].version])
+                                if verInstall is None:
+                                    depend_graph[rosdep_key]['install_keys'] = list([resolution[0] + compare + verRequested])
+                                depend_graph[rosdep_key]['version_eq'] = ros_dependencies_dict[rosdep_key].version_eq
+                                depend_graph[rosdep_key]['version_gte'] = ros_dependencies_dict[rosdep_key].version_gte
+                                depend_graph[rosdep_key]['version_gt'] = ros_dependencies_dict[rosdep_key].version_gt
+                                depend_graph[rosdep_key]['version_lte'] = ros_dependencies_dict[rosdep_key].version_lte
+                                depend_graph[rosdep_key]['version_lt'] = ros_dependencies_dict[rosdep_key].version_lt
+                            else:
+                                depend_graph[rosdep_key]['install_keys'] = list([resolution[0]])
                         else:
                             depend_graph[rosdep_key]['install_keys'] = list(resolution)
                         depend_graph[rosdep_key]['dependencies'] = list(dependencies)

@@ -237,7 +237,9 @@ def dpkg_detect(pkgs, exec_fn=None):
     # This is a map `package name -> package name optionally with version`.
     version_lock_map = {}
     for p in pkgs:
+        hasVersion = False
         if '=' in p or '>' in p or '<' in p:
+            hasVersion = True
             packageName = re.split('=|>|<',p)[0]
             packageVersion = re.split('=|>|<',p)[1]
             # check if package already exists
@@ -252,7 +254,7 @@ def dpkg_detect(pkgs, exec_fn=None):
             else:
                 version_lock_map[packageName] = {'full_name': p, 'version': packageVersion}
         else:
-            version_lock_map[p] = p
+            version_lock_map[p] = {'full_name': p, 'version': 'any'}
     cmd = ['dpkg-query', '-W', '-f=\'${Package} ${Status} ${version}\n\'']
     cmd.extend(version_lock_map.keys())
 
@@ -267,7 +269,7 @@ def dpkg_detect(pkgs, exec_fn=None):
     for pkg in pkg_list:
         pkg_row = pkg.split()
         if len(pkg_row) == 5:
-            if(pkg_row[3] == 'installed') and len(version_lock_map[pkg_row[0]]) > 1 and pkg_row[4] in version_lock_map[pkg_row[0]]['version']:
+            if(pkg_row[3] == 'installed') and len(version_lock_map[pkg_row[0]]) > 1 and (not hasVersion or pkg_row[4] in version_lock_map[pkg_row[0]]['version']):
                 ret_list.append(pkg_row[0])
     installed_packages = []
     for r in ret_list:
